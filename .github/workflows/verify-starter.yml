@@ -110,10 +110,19 @@ jobs:
             kill -0 "$proxy_pid" || { echo "::error::Proxy exited during startup"; exit 1; }
             sleep 2
           done
-          status=$(curl --noproxy '*' -sS -o /dev/null -w '%{http_code}' "$MODEL_PROXY_URL/v1/models")
-          [[ "$status" == 401 || "$status" == 403 ]]
-          curl --noproxy '*' -fsS -H "Authorization: Bearer $MODEL_PROXY_KEY" "$MODEL_PROXY_URL/v1/models" \
-            | jq -e 'any(.data[]; .id == "claude-opus-5-5")' >/dev/null
+          status=$(curl --noproxy '*' -sS -o "$proxy_dir/denied.json" -w '%{http_code}' \
+            -H 'Content-Type: application/json' -d '{"model":"claude-opus-5-5","messages":[]}' \
+            "$MODEL_PROXY_URL/v1/chat/completions")
+          echo "Unauthenticated inference request returned HTTP $status."
+          if [[ "$status" != 401 && "$status" != 403 ]]; then
+            echo "::error::Proxy did not reject the unauthenticated request as expected."
+            exit 1
+          fi
+          listing=$(curl --noproxy '*' -sS -o "$proxy_dir/models.json" -w '%{http_code}' \
+            -H "Authorization: Bearer $MODEL_PROXY_KEY" "$MODEL_PROXY_URL/v1/models")
+          echo "Authenticated model listing returned HTTP $listing."
+          [[ "$listing" == 200 ]]
+          jq -e 'any(.data[]; .id == "claude-opus-5-5")' "$proxy_dir/models.json" >/dev/null
           echo "Proxy authentication passed and the Claude Opus 5.5 route is registered."
           if [[ -z "$ANTHROPIC_API_KEY" ]]; then
             echo "::error::Live inference requires a funded Anthropic API credential. No model request was made."
