@@ -54,9 +54,23 @@ jobs:
         run: |
           uv run python -m kit validate ../starter
           uv run python -m kit artifacts ../starter
+      - uses: actions/checkout@v4
+        with:
+          ref: 88d8aa56ff280bc7af36d4d2be627c0eee0eab58
+          path: study
+          persist-credentials: false
+      - name: Reproduce the published trajectory counts
+        working-directory: kit-source
+        run: |
+          uv run python ../study/starter-study/audit.py ../starter . "$RUNNER_TEMP/tasks.json"
+          jq -S 'sort_by(.id)' "$RUNNER_TEMP/tasks.json" > "$RUNNER_TEMP/derived.json"
+          jq -S 'sort_by(.id)' ../study/starter-study/tasks.json | diff - "$RUNNER_TEMP/derived.json"
       - name: Build the evaluation bundle in Docker
         working-directory: kit-source
         run: uv run python -m kit build ../starter
       - name: Run the official readiness check
+        env:
+          MODEL_PROXY_URL: ${{ github.run_attempt > 1 && secrets.PLE_STARTER_PROXY_URL || '' }}
+          MODEL_PROXY_KEY: ${{ github.run_attempt > 1 && secrets.PLE_STARTER_PROXY_KEY || '' }}
         working-directory: kit-source
         run: uv run python -m kit check ../starter
