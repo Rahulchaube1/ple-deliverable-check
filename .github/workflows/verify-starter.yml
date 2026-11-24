@@ -5,6 +5,25 @@ on:
 permissions:
   contents: read
 jobs:
+  preserve:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preserve the original commit on a dedicated entry branch
+        run: |
+          set -euo pipefail
+          ref=refs/heads/pi-opus-starter
+          commit=22c26a93a9e4974b16e4351faab0e860ff9fb24f
+          git fetch --no-tags https://github.com/physical-engineerings-last-exam/submission-template.git "$commit"
+          existing=$(git ls-remote origin "$ref" | cut -f1)
+          if [ -z "$existing" ]; then
+            git push --force-with-lease="$ref:" origin "$commit:$ref"
+          else
+            test "$existing" = "$commit"
+          fi
   validate:
     runs-on: ubuntu-24.04
     timeout-minutes: 50
@@ -20,7 +39,13 @@ jobs:
           repository: physical-engineerings-last-exam/submission-template
           ref: 22c26a93a9e4974b16e4351faab0e860ff9fb24f
           path: starter
+          fetch-depth: 0
           persist-credentials: false
+      - name: Check complete local checkout
+        run: |
+          git -C starter switch -C main 22c26a93a9e4974b16e4351faab0e860ff9fb24f
+          test "$(git -C starter rev-parse --is-shallow-repository)" = false
+          git -C starter fsck --full
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: false
