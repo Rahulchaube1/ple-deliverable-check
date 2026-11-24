@@ -12,7 +12,7 @@ I joined each task's reward from the pinned artifact manifest to its exported fi
 
 ![Outcomes by discipline, one published run](failure-breakdown.png)
 
-The foundation strategy and solar witness package had no exported deliverable files. The solar session's last message described the next action it intended to take. The foundation session ended with a tool-call marker. A completion check that asks an agent to reopen its required deliverable could detect a missing file if the agent identified the right path. Any score improvement from that intervention remains unmeasured.
+The foundation strategy and solar witness package had no exported deliverable files. The solar session's last message described the next action it intended to take. The foundation session ended with a tool-call marker. A completion check that asks an agent to reopen its required deliverable could detect a missing file if the agent identified the right path. As a retrospective failure detector, “no exported file” flagged two of four zero-score tasks and none of the 25 positive-score tasks. With 29 observations and different delivery formats, this is a diagnostic for this run. Any score improvement from that intervention remains unmeasured.
 
 The two routing tasks had a different failure signature. The standard layout used 122 tool calls, and the offset layout used 158. Each exported `solution.py`, exactly the path the official dev-set definition collects. The final summaries also described an IFC model and a reconciliation file. Their absence from the export is expected because the grader collects the generator script. Inferring the cause of either zero from the missing IFC would be a mistake.
 
@@ -43,4 +43,10 @@ On these dev measurements, Hydrogen scored 0.028 above Opus at about 29% of its 
 
 The trajectories give an observed effort distribution. They cannot establish a plateau at a particular call budget because task difficulty and the number of calls vary together. The experiment I would use to test early verification is a paired run at equal budgets, with the checker enabled or disabled, reporting both changes in reward and repair costs. No controlled ablation or hidden-set result is claimed here.
 
-[Unchanged starter and artifacts](https://github.com/physical-engineerings-last-exam/submission-template/tree/22c26a93a9e4974b16e4351faab0e860ff9fb24f) · [Official dev leaderboard](https://ple-bench.com/leaderboard?set=dev) · [Official task definitions](https://github.com/google-research/ple/blob/5cf736f8b6e6f28eea71cae52de0c3bedaa88fa2/eval/dev_set.yaml) · [Verification run](https://github.com/Rahulchaube1/ple-deliverable-check/actions/runs/45339875590)
+## Reproducibility
+
+The participant-owned entry branch preserves the organizer's original commit. The current official kit accepted the configuration and artifact directory and built a 139 MiB evaluation bundle in Docker. It counted 28 usable task outputs, marked the foundation strategy task empty, and warned of a dev-set revision change. The published 0.49124 is the historical manifest mean. Live model and smoke checks are pending an authorized model proxy.
+
+To reproduce the aggregate counts, run `python audit.py /path/to/starter /path/to/ple tasks.json` with PyYAML installed, then `python figures.py` with Matplotlib installed. Use the two pinned commits linked below. The plotted model-cost points come from the public leaderboard.
+
+[Participant-owned starter commit](https://github.com/Rahulchaube1/ple-deliverable-check/tree/22c26a93a9e4974b16e4351faab0e860ff9fb24f) · [Organizer source and artifacts](https://github.com/physical-engineerings-last-exam/submission-template/tree/22c26a93a9e4974b16e4351faab0e860ff9fb24f) · [Official dev leaderboard](https://ple-bench.com/leaderboard?set=dev) · [Official task definitions](https://github.com/google-research/ple/blob/5cf736f8b6e6f28eea71cae52de0c3bedaa88fa2/eval/dev_set.yaml) · [Verification run](https://github.com/Rahulchaube1/ple-deliverable-check/actions/runs/45340695374)
