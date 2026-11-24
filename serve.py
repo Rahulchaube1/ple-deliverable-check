@@ -175,9 +175,9 @@ async def completion(client, messages, model):
                 except ValueError:
                     delay = max(delay, 15)
             elif response.status_code not in (408, 500, 502, 503, 504):
-                response.raise_for_status()
+                raise RuntimeError(f"Model HTTP {response.status_code}: {failure[:850]}")
             if attempt == 5:
-                response.raise_for_status()
+                raise RuntimeError(f"Model HTTP {response.status_code} after retries: {failure[:850]}")
         except httpx.TransportError:
             if attempt == 5:
                 raise
