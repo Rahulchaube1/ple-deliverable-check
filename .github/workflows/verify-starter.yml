@@ -1,0 +1,37 @@
+name: Verify official PLE starter
+on:
+  push:
+    branches: [verify-ple-starter]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: google-research/ple
+          ref: 5cf736f8b6e6f28eea71cae52de0c3bedaa88fa2
+          path: kit-source
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: physical-engineerings-last-exam/submission-template
+          ref: 22c26a93a9e4974b16e4351faab0e860ff9fb24f
+          path: starter
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: false
+      - name: Validate configuration and committed dev artifacts
+        working-directory: kit-source
+        run: |
+          uv run python -m kit validate ../starter
+          uv run python -m kit artifacts ../starter
+      - name: Build the evaluation bundle in Docker
+        working-directory: kit-source
+        run: uv run python -m kit build ../starter
+      - name: Run the official readiness check
+        working-directory: kit-source
+        run: uv run python -m kit check ../starter
