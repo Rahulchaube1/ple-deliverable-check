@@ -63,8 +63,7 @@ jobs:
         working-directory: kit-source
         run: |
           uv run python ../study/starter-study/audit.py ../starter . "$RUNNER_TEMP/tasks.json"
-          jq -S 'sort_by(.id)' "$RUNNER_TEMP/tasks.json" > "$RUNNER_TEMP/derived.json"
-          jq -S 'sort_by(.id)' ../study/starter-study/tasks.json | diff - "$RUNNER_TEMP/derived.json"
+          jq -en --slurpfile expected ../study/starter-study/tasks.json --slurpfile actual "$RUNNER_TEMP/tasks.json" '($expected[0] | sort_by(.id)) == ($actual[0] | sort_by(.id))'
       - name: Build the evaluation bundle in Docker
         working-directory: kit-source
         run: uv run python -m kit build ../starter
