@@ -2,6 +2,7 @@ name: Check GPT-OSS engineering harness
 on:
   push:
     branches: [verify-groq-free]
+    paths: ['.github/workflows/verify-groq-free.yml']
 permissions:
   contents: read
 jobs:
@@ -11,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: d55e02029fd68426c70282566cf335b3e49dff3b
+          ref: 1fae06fd792e20eed70f30f2b2b530b36648c622
           fetch-depth: 0
           path: entry
           persist-credentials: false
