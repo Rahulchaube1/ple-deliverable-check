@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: d55e02029fd68426c70282566cf335b3e49dff3b
+          ref: 280d6d48b6f494216dc98767873bb7f5efeb7798
           fetch-depth: 0
           path: entry
           persist-credentials: false
@@ -182,7 +182,18 @@ jobs:
           +NCoAog5GOI2yzLr9Q==
           -----END CERTIFICATE-----
           CERT
-          paths=(eval.log)
+          python - "$eval_dir" "$RUNNER_TEMP/runner-errors.json" <<'PY'
+          import json, pathlib, sys
+          root = pathlib.Path(sys.argv[1])
+          errors = []
+          for result in root.glob("attempt*/jobs/dev/*/result.json"):
+              record = json.loads(result.read_text())
+              error = record.get("exception_info") or {}
+              if error:
+                  errors.append({k: str(error.get(k, ""))[:2000] for k in ("exception_type", "exception_message")})
+          pathlib.Path(sys.argv[2]).write_text(json.dumps(errors))
+          PY
+          paths=(eval.log runner-errors.json)
           [[ ! -d "$eval_dir/artifacts" ]] || paths+=(ple-evaluation/artifacts)
           [[ ! -f "$eval_dir/results.json" ]] || paths+=(ple-evaluation/results.json)
           tar -czf - -C "$RUNNER_TEMP" "${paths[@]}" | openssl cms -encrypt -binary -aes256 -stream -outform DER -out "$GITHUB_WORKSPACE/evaluation.cms" "$RUNNER_TEMP/recipient.pem"
