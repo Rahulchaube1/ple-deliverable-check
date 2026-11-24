@@ -137,6 +137,12 @@ async def completion(client, messages, model):
     for attempt in range(4):
         try:
             response = await client.post("chat/completions", json=body)
+            if response.status_code == 400:
+                error = response.json().get("error") or {}
+                kind = str(error.get("code") or error.get("type") or "bad_request")
+                # Report the provider explanation without dumping submitted prompts or generations.
+                detail = str(error.get("message") or "").split("failed_generation")[0]
+                raise ValueError(f"Model request rejected ({kind}): {detail[:480]}")
             response.raise_for_status()
             return response.json()
         except httpx.HTTPStatusError as err:
@@ -176,7 +182,9 @@ async def solve(session):
             await session.usage(model, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0),
                                 (usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0))
             msg = response["choices"][0]["message"]
-            messages.append(msg)
+            # Only replay fields accepted as assistant input by the Chat Completions API.
+            messages.append({key: msg[key] for key in ("role", "content", "tool_calls")
+                             if msg.get(key) is not None})
             if msg.get("content"):
                 last = msg["content"]
             calls_out = msg.get("tool_calls") or []
