@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 280d6d48b6f494216dc98767873bb7f5efeb7798
+          ref: 1fae06fd792e20eed70f30f2b2b530b36648c622
           fetch-depth: 0
           path: entry
           persist-credentials: false
@@ -194,6 +194,9 @@ jobs:
           pathlib.Path(sys.argv[2]).write_text(json.dumps(errors))
           PY
           paths=(eval.log runner-errors.json)
+          # Preserve the provider's diagnostics only inside the encrypted checkout.
+          cp "$proxy_dir/server.log" "$RUNNER_TEMP/model-proxy.log"
+          paths+=(model-proxy.log)
           [[ ! -d "$eval_dir/artifacts" ]] || paths+=(ple-evaluation/artifacts)
           [[ ! -f "$eval_dir/results.json" ]] || paths+=(ple-evaluation/results.json)
           tar -czf - -C "$RUNNER_TEMP" "${paths[@]}" | openssl cms -encrypt -binary -aes256 -stream -outform DER -out "$GITHUB_WORKSPACE/evaluation.cms" "$RUNNER_TEMP/recipient.pem"
