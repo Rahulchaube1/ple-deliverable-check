@@ -145,14 +145,54 @@ def compact_request(messages):
         del messages[2:first_group]
 
 
-async def completion(client, messages, model):
+def json_action_request(messages, model):
+    catalog = [item["function"] for item in TOOLS]
+    transcript = []
+    for item in messages:
+        role, content = item["role"], item.get("content") or ""
+        if role == "system":
+            content += ("\nChoose one available action per turn. Reply with a single JSON object "
+                        "having name (string) and arguments (object). Use exact property names. "
+                        "Encode multiline commands as valid JSON strings. Actions: " + json.dumps(catalog))
+        elif role == "tool":
+            role, content = "user", "Tool result: " + content
+        elif item.get("tool_calls"):
+            content = json.dumps([call["function"] for call in item["tool_calls"]])
+        transcript.append({"role": role, "content": content})
+    return {"model": model, "messages": transcript, "response_format": {"type": "json_object"}}
+
+
+def decode_json_action(response):
+    message = response["choices"][0]["message"]
+    action = json.loads(message["content"])
+    if not isinstance(action, dict) or action.get("name") not in {item["function"]["name"] for item in TOOLS}:
+        raise ValueError("unknown action")
+    if not isinstance(action.get("arguments"), dict):
+        raise ValueError("expected an arguments object")
+    message["content"] = None
+    message["tool_calls"] = [{"id": "call_" + os.urandom(8).hex(), "type": "function",
+                               "function": {"name": action["name"], "arguments": json.dumps(action["arguments"])}}]
+
+
+async def completion(client, messages, model, mode):
     body = {"model": model, "messages": messages, "tools": TOOLS, "tool_choice": "auto"}
     for attempt in range(6):
+        if mode["json_actions"]:
+            body = json_action_request(messages, model)
         delay = 2 ** attempt
         try:
             response = await client.post("chat/completions", json=body)
             if response.is_success:
-                return response.json()
+                result = response.json()
+                if mode["json_actions"]:
+                    try:
+                        decode_json_action(result)
+                    except (TypeError, KeyError, ValueError) as error:
+                        if attempt == 5:
+                            raise ValueError("Model did not provide a valid JSON action") from error
+                        messages.append({"role": "user", "content": "Return one JSON object with a valid action name and arguments object."})
+                        continue
+                return result
             try:
                 error = response.json().get("error") or {}
             except ValueError:
@@ -163,9 +203,10 @@ async def completion(client, messages, model):
                 compact_request(messages)
                 body["max_completion_tokens"] = 1536
             elif response.status_code == 400 and any(reason in failure for reason in
-                    ("tool_use_failed", "failed to call a function", "failed to call tool", "tool call validation")):
-                # Groq can reject the model's generated tool call before returning it.
-                # Retry the same turn with a schema reminder. Never replay a rejected tool.
+                    ("tool_use_failed", "failed to call a function", "failed to call tool", "tool call validation",
+                     "failed to parse tool call arguments")):
+                # Reissue the turn as a JSON action and retain that mode for this task.
+                mode["json_actions"] = True
                 if messages[-1].get("content") != "Call one available tool using its exact argument schema.":
                     messages.append({"role": "user", "content": "Call one available tool using its exact argument schema."})
             elif response.status_code == 429:
@@ -195,6 +236,7 @@ async def solve(session):
     headers = {"Authorization": "Bearer " + os.environ["MODEL_API_KEY"]}
     calls = max(2, int(os.getenv("PLE_MAX_CALLS", "80")))
     last = ""
+    mode = {"json_actions": False}
     async with httpx.AsyncClient(base_url=endpoint, headers=headers, timeout=300) as client:
         for turn in range(calls):
             left = session.time_left()
@@ -205,7 +247,7 @@ async def solve(session):
             trim_history(messages)
             try:
                 async with asyncio.timeout(min(left - 1, 600) if left is not None else 600):
-                    response = await completion(client, messages, model)
+                    response = await completion(client, messages, model, mode)
             except TimeoutError:
                 break
             usage = response.get("usage") or {}
