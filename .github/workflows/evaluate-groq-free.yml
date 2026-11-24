@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 1fae06fd792e20eed70f30f2b2b530b36648c622
+          ref: 0e96488e77540a27d3b21c9e89b425c477613383
           fetch-depth: 0
           path: entry
           persist-credentials: false
