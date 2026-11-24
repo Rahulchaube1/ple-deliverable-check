@@ -145,52 +145,102 @@ def compact_request(messages):
         del messages[2:first_group]
 
 
-def json_action_request(messages, model):
-    catalog = [item["function"] for item in TOOLS]
+ACTION_FORMAT = """Send exactly one action per turn. Put the action name on the first line, then its payload on the following lines. Use plain text, without Markdown fences or a wrapper. The six supported formats are:
+
+bash
+<shell command, which may span lines>
+
+write
+<file path>
+<literal file content, which may span lines>
+
+declare
+<destination description>
+<one deliverable path per remaining line, or no paths for an app-only destination>
+
+discover
+<search query>
+
+app
+<qualified tool name>
+<JSON object of arguments>
+
+finish
+<delivery summary>
+
+Use the actual path, command, content or summary in place of the angle-bracket descriptions."""
+
+
+def text_action_request(messages, model):
     transcript = []
     for item in messages:
         role, content = item["role"], item.get("content") or ""
         if role == "system":
-            content += ("\nChoose one available action per turn. Reply with a single JSON object "
-                        "having name (string) and arguments (object). Use exact property names. "
-                        "Encode multiline commands as valid JSON strings. Actions: " + json.dumps(catalog))
+            content += "\n" + ACTION_FORMAT
         elif role == "tool":
-            role, content = "user", "Tool result: " + content
+            role, content = "user", "Tool result:\n" + content + "\nContinue with one action."
         elif item.get("tool_calls"):
-            content = json.dumps([call["function"] for call in item["tool_calls"]])
+            calls = []
+            for call in item["tool_calls"]:
+                fn = call["function"]
+                args = json.loads(fn["arguments"])
+                name = fn["name"]
+                if name == "declare":
+                    fields = [args.get("destination", ""), *args.get("paths", [])]
+                else:
+                    keys = {"bash": ("command",), "write": ("path", "content"), "discover": ("query",),
+                            "app": ("name", "arguments_json"), "finish": ("summary",)}.get(name, ())
+                    fields = [str(args.get(k, "")) for k in keys]
+                calls.append("\n".join([name, *fields]))
+            content = "\n".join(calls)
         transcript.append({"role": role, "content": content})
-    return {"model": model, "messages": transcript, "response_format": {"type": "json_object"}}
+    return {"model": model, "messages": transcript}
 
 
-def decode_json_action(response):
+def decode_text_action(response):
     message = response["choices"][0]["message"]
-    action = json.loads(message["content"])
-    if not isinstance(action, dict) or action.get("name") not in {item["function"]["name"] for item in TOOLS}:
+    text = (message.get("content") or "").lstrip()
+    if text.startswith("```") and text.rstrip().endswith("```"):
+        text = text.partition("\n")[2].rstrip()[:-3]
+    header, _, payload = text.partition("\n")
+    name = header.strip().lower().rstrip(":")
+    first, separator, rest = payload.partition("\n")
+    if name in ("write", "app"):
+        if not first.strip() or not separator:
+            raise ValueError("path or tool name and payload are required")
+        args = ({"path": first.strip(), "content": rest} if name == "write"
+                else {"name": first.strip(), "arguments_json": rest.strip()})
+    elif name == "declare":
+        args = {"destination": first.strip(), "paths": [p.strip() for p in rest.splitlines() if p.strip()]}
+    elif name in ("bash", "discover", "finish"):
+        args = {{"bash": "command", "discover": "query", "finish": "summary"}[name]: payload}
+    else:
         raise ValueError("unknown action")
-    if not isinstance(action.get("arguments"), dict):
-        raise ValueError("expected an arguments object")
     message["content"] = None
     message["tool_calls"] = [{"id": "call_" + os.urandom(8).hex(), "type": "function",
-                               "function": {"name": action["name"], "arguments": json.dumps(action["arguments"])}}]
+                              "function": {"name": name, "arguments": json.dumps(args)}}]
 
 
 async def completion(client, messages, model, mode):
     body = {"model": model, "messages": messages, "tools": TOOLS, "tool_choice": "auto"}
+    max_output = None
     for attempt in range(6):
-        if mode["json_actions"]:
-            body = json_action_request(messages, model)
+        if mode["text_actions"]:
+            body = text_action_request(messages, model)
+        if max_output is not None:
+            body["max_completion_tokens"] = max_output
         delay = 2 ** attempt
         try:
             response = await client.post("chat/completions", json=body)
             if response.is_success:
                 result = response.json()
-                if mode["json_actions"]:
+                if mode["text_actions"]:
                     try:
-                        decode_json_action(result)
+                        decode_text_action(result)
                     except (TypeError, KeyError, ValueError) as error:
                         if attempt == 5:
-                            raise ValueError("Model did not provide a valid JSON action") from error
-                        messages.append({"role": "user", "content": "Return one JSON object with a valid action name and arguments object."})
+                            raise ValueError("Model did not provide a valid action") from error
+                        messages.append({"role": "user", "content": "Start with a single lowercase action name on its own line, followed by the payload."})
                         continue
                 return result
             try:
@@ -201,14 +251,14 @@ async def completion(client, messages, model, mode):
             failure = (str(error.get("code") or "") + " " + detail).lower()
             if response.status_code == 413 or "request too large" in failure:
                 compact_request(messages)
-                body["max_completion_tokens"] = 1536
+                max_output = 1536
             elif response.status_code == 400 and any(reason in failure for reason in
                     ("tool_use_failed", "failed to call a function", "failed to call tool", "tool call validation",
                      "failed to parse tool call arguments")):
-                # Reissue the turn as a JSON action and retain that mode for this task.
-                mode["json_actions"] = True
-                if messages[-1].get("content") != "Call one available tool using its exact argument schema.":
-                    messages.append({"role": "user", "content": "Call one available tool using its exact argument schema."})
+                # Shell scripts and file bodies can use literal newlines in this mode.
+                mode["text_actions"] = True
+                if messages[-1].get("content") != "Use the plain-text action format. Put the action name on the first line.":
+                    messages.append({"role": "user", "content": "Use the plain-text action format. Put the action name on the first line."})
             elif response.status_code == 429:
                 raw_delay = response.headers.get("retry-after", "")
                 try:
@@ -236,7 +286,7 @@ async def solve(session):
     headers = {"Authorization": "Bearer " + os.environ["MODEL_API_KEY"]}
     calls = max(2, int(os.getenv("PLE_MAX_CALLS", "80")))
     last = ""
-    mode = {"json_actions": False}
+    mode = {"text_actions": False}
     async with httpx.AsyncClient(base_url=endpoint, headers=headers, timeout=300) as client:
         for turn in range(calls):
             left = session.time_left()
