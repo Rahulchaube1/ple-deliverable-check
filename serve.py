@@ -132,26 +132,56 @@ def trim_history(messages):
                     break
 
 
+def compact_request(messages):
+    """Reduce a long request while preserving complete tool-call exchanges."""
+    for message in messages[2:]:
+        if message["role"] == "tool":
+            message["content"] = bounded(message["content"], 1200)
+    while len(json.dumps(messages, ensure_ascii=False)) > 16000:
+        first_group = next((i for i in range(3, len(messages))
+                            if messages[i]["role"] in ("user", "assistant")), None)
+        if first_group is None:
+            break
+        del messages[2:first_group]
+
+
 async def completion(client, messages, model):
     body = {"model": model, "messages": messages, "tools": TOOLS, "tool_choice": "auto"}
-    for attempt in range(4):
+    for attempt in range(6):
+        delay = 2 ** attempt
         try:
             response = await client.post("chat/completions", json=body)
-            if response.status_code == 400:
+            if response.is_success:
+                return response.json()
+            try:
                 error = response.json().get("error") or {}
-                kind = str(error.get("code") or error.get("type") or "bad_request")
-                # Report the provider explanation without dumping submitted prompts or generations.
-                detail = str(error.get("message") or "").split("failed_generation")[0]
-                raise ValueError(f"Model request rejected ({kind}): {detail[:480]}")
-            response.raise_for_status()
-            return response.json()
-        except httpx.HTTPStatusError as err:
-            if err.response.status_code not in (408, 429, 500, 502, 503, 504) or attempt == 3:
-                raise
+            except ValueError:
+                error = {}
+            detail = str(error.get("message") or "")
+            failure = (str(error.get("code") or "") + " " + detail).lower()
+            if response.status_code == 413 or "request too large" in failure:
+                compact_request(messages)
+                body["max_completion_tokens"] = 1536
+            elif response.status_code == 400 and any(reason in failure for reason in
+                    ("tool_use_failed", "failed to call a function", "failed to call tool", "tool call validation")):
+                # Groq can reject the model's generated tool call before returning it.
+                # Retry the same turn with a schema reminder. Never replay a rejected tool.
+                if messages[-1].get("content") != "Call one available tool using its exact argument schema.":
+                    messages.append({"role": "user", "content": "Call one available tool using its exact argument schema."})
+            elif response.status_code == 429:
+                raw_delay = response.headers.get("retry-after", "")
+                try:
+                    delay = max(delay, min(180, float(raw_delay)))
+                except ValueError:
+                    delay = max(delay, 15)
+            elif response.status_code not in (408, 500, 502, 503, 504):
+                response.raise_for_status()
+            if attempt == 5:
+                response.raise_for_status()
         except httpx.TransportError:
-            if attempt == 3:
+            if attempt == 5:
                 raise
-        await asyncio.sleep(2 ** attempt)
+        await asyncio.sleep(delay)
 
 
 async def solve(session):
