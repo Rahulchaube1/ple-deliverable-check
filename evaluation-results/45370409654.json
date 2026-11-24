@@ -1,0 +1,32 @@
+{
+  "task": "data-center-site-model",
+  "model": "google-cloud/gpt-oss-120b",
+  "harness_commit": "42ac6a6ad624dd77205657fe696bba5fe8a772a0",
+  "workflow_run": 45370409654,
+  "artifact_id": 14909236234,
+  "score": 0,
+  "reward": 0,
+  "measured": true,
+  "classification": "harness",
+  "cause": "Groq daily token limit reached during the task after a successful preflight.",
+  "elapsed_seconds": 199,
+  "input_tokens": 19449,
+  "output_tokens": 4705,
+  "exported_file_count": 1,
+  "exported_file_bytes": 1694,
+  "kit_artifact_review": {
+    "usable": 1,
+    "missing": 28,
+    "scope": "this single-task run"
+  },
+  "judge": "Official automated-check task; no substitute model judge.",
+  "quota": {
+    "daily_limit": 200000,
+    "used_at_rejection": 199823,
+    "requested": 5527,
+    "provider_retry_after": "38m31.2s",
+    "conservative_earliest_retry_utc": "2026-11-24T10:43:47Z",
+    "next_full_task_check_utc": "2026-11-25T10:06:00Z",
+    "note": "The retry interval covers a single 5,527-token request. After two quota-limited trials, allow a full 24-hour refill from this run before launching another task, unless independently verified daily balance covers a full trial earlier. Minute headers from a small probe do not establish daily capacity. Actual headroom depends on other account usage."
+  }
+}
