@@ -98,15 +98,64 @@ jobs:
           litellm_settings:
             num_retries: 0
           CONFIG
+          if ! command -v nginx >/dev/null; then
+            sudo apt-get -q update
+            sudo apt-get -qy install nginx-core
+          fi
+          cat > "$proxy_dir/nginx.template" <<'NGINX'
+          daemon off;
+          master_process off;
+          pid ${proxy_dir}/nginx.pid;
+          error_log stderr warn;
+          events {}
+          http {
+            access_log off;
+            client_body_temp_path ${proxy_dir}/body;
+            proxy_temp_path ${proxy_dir}/upstream;
+            fastcgi_temp_path ${proxy_dir}/fastcgi;
+            uwsgi_temp_path ${proxy_dir}/uwsgi;
+            scgi_temp_path ${proxy_dir}/scgi;
+            map $http_authorization $bearer_ok {
+              default 0;
+              ~^Bearer[[:space:]]${MODEL_PROXY_KEY}$ 1;
+            }
+            map $http_x_api_key $native_ok {
+              default 0;
+              ~^${MODEL_PROXY_KEY}$ 1;
+            }
+            map "$bearer_ok:$native_ok" $authorized {
+              default 1;
+              "0:0" 0;
+            }
+            server {
+              listen ${bridge}:4000;
+              client_max_body_size 32m;
+              location / {
+                if ($authorized = 0) { return 401; }
+                proxy_pass http://127.0.0.1:4001;
+                proxy_http_version 1.1;
+                proxy_set_header Authorization "Bearer ${MODEL_PROXY_KEY}";
+                proxy_set_header Connection "";
+                proxy_buffering off;
+                proxy_read_timeout 900s;
+              }
+            }
+          }
+          NGINX
+          export bridge proxy_dir
+          envsubst '${bridge} ${proxy_dir} ${MODEL_PROXY_KEY}' < "$proxy_dir/nginx.template" > "$proxy_dir/nginx.conf"
+          nginx -p "$proxy_dir" -c "$proxy_dir/nginx.conf" > "$proxy_dir/gateway.log" 2>&1 &
+          gateway_pid=$!
           uvx --python 3.11 --from 'litellm[proxy]==1.90.0' litellm \
-            --config "$proxy_dir/config.yaml" --host "$bridge" --port 4000 \
+            --config "$proxy_dir/config.yaml" --host 127.0.0.1 --port 4001 \
             > "$proxy_dir/server.log" 2>&1 &
           proxy_pid=$!
-          trap 'kill "$proxy_pid" 2>/dev/null || true; rm -rf "$proxy_dir"' EXIT
+          trap 'kill "$proxy_pid" "$gateway_pid" 2>/dev/null || true; rm -rf "$proxy_dir"' EXIT
           for i in {1..120}; do
-            if curl -fsS --noproxy '*' --max-time 2 "$MODEL_PROXY_URL/health/liveliness" >/dev/null 2>&1; then
+            if curl -fsS --noproxy '*' --max-time 2 "http://127.0.0.1:4001/health/liveliness" >/dev/null 2>&1; then
               break
             fi
+            kill -0 "$gateway_pid" || { echo "::error::Gateway exited during startup"; exit 1; }
             kill -0 "$proxy_pid" || { echo "::error::Proxy exited during startup"; exit 1; }
             sleep 2
           done
