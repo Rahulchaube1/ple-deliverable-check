@@ -1,0 +1,208 @@
+name: Evaluate GPT-OSS on a PLE development task
+on:
+  push:
+    branches: [verify-groq-free]
+    paths: ['.github/workflows/evaluate-groq-free.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: d55e02029fd68426c70282566cf335b3e49dff3b
+          fetch-depth: 0
+          path: entry
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: google-research/ple
+          ref: 5cf736f8b6e6f28eea71cae52de0c3bedaa88fa2
+          path: kit-source
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v6
+      - name: Run deliverable and protocol tests
+        working-directory: entry
+        run: |
+          git switch -C main HEAD
+          uv run --no-project --python 3.12 --with-requirements requirements.txt python -m unittest discover -s tests -v
+      - name: Validate the entry and build the Docker bundle
+        working-directory: kit-source
+        run: |
+          uv run python -m kit validate ../entry
+          uv run python -m kit build ../entry
+      - name: Check the model route and run the live kit when authorized
+        env:
+          HF_TOKEN: ${{ secrets.PLE_HF_READ_TOKEN }}
+          GROQ_API_KEY: ${{ (github.run_attempt > 1 || startsWith(github.event.head_commit.message, 'Run free Groq readiness')) && secrets.PLE_GROQ_FREE_API_KEY || '' }}
+        working-directory: kit-source
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          proxy_dir=$(mktemp -d "$RUNNER_TEMP/ple-proxy.XXXXXX")
+          bridge=$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}')
+          export MODEL_PROXY_URL="http://$bridge:4000"
+          MODEL_PROXY_KEY="sk-$(openssl rand -hex 32)"
+          export MODEL_PROXY_KEY
+          echo "::add-mask::$MODEL_PROXY_KEY"
+          cat > "$proxy_dir/config.yaml" <<'CONFIG'
+          model_list:
+            - model_name: gpt-oss-120b
+              litellm_params:
+                model: openai/openai/gpt-oss-120b
+                api_base: https://api.groq.com/openai/v1
+                api_key: os.environ/GROQ_API_KEY
+          general_settings:
+            master_key: os.environ/MODEL_PROXY_KEY
+          litellm_settings:
+            num_retries: 0
+          CONFIG
+          if ! command -v nginx >/dev/null; then
+            sudo apt-get -q update
+            sudo apt-get -qy install nginx-core
+          fi
+          cat > "$proxy_dir/nginx.template" <<'NGINX'
+          daemon off;
+          master_process off;
+          pid ${proxy_dir}/nginx.pid;
+          error_log stderr warn;
+          events {}
+          http {
+            access_log off;
+            client_body_temp_path ${proxy_dir}/body;
+            proxy_temp_path ${proxy_dir}/upstream;
+            fastcgi_temp_path ${proxy_dir}/fastcgi;
+            uwsgi_temp_path ${proxy_dir}/uwsgi;
+            scgi_temp_path ${proxy_dir}/scgi;
+            map $http_authorization $bearer_ok {
+              default 0;
+              ~^Bearer[[:space:]]${MODEL_PROXY_KEY}$ 1;
+            }
+            map $http_x_api_key $native_ok {
+              default 0;
+              ~^${MODEL_PROXY_KEY}$ 1;
+            }
+            map "$bearer_ok:$native_ok" $authorized {
+              default 1;
+              "0:0" 0;
+            }
+            server {
+              listen ${bridge}:4000;
+              client_max_body_size 32m;
+              location / {
+                if ($authorized = 0) { return 401; }
+                proxy_pass http://127.0.0.1:4001;
+                proxy_http_version 1.1;
+                proxy_set_header Authorization "Bearer ${MODEL_PROXY_KEY}";
+                proxy_set_header Connection "";
+                proxy_buffering off;
+                proxy_read_timeout 900s;
+              }
+            }
+          }
+          NGINX
+          export bridge proxy_dir
+          envsubst '${bridge} ${proxy_dir} ${MODEL_PROXY_KEY}' < "$proxy_dir/nginx.template" > "$proxy_dir/nginx.conf"
+          nginx -p "$proxy_dir" -c "$proxy_dir/nginx.conf" > "$proxy_dir/gateway.log" 2>&1 &
+          gateway_pid=$!
+          uvx --python 3.11 --from 'litellm[proxy]==1.90.0' litellm \
+            --config "$proxy_dir/config.yaml" --host 127.0.0.1 --port 4001 \
+            > "$proxy_dir/server.log" 2>&1 &
+          proxy_pid=$!
+          trap 'kill "$proxy_pid" "$gateway_pid" 2>/dev/null || true; rm -rf "$proxy_dir"' EXIT
+          for i in {1..120}; do
+            if curl -fsS --noproxy '*' --max-time 2 "http://127.0.0.1:4001/health/liveliness" >/dev/null 2>&1; then
+              break
+            fi
+            kill -0 "$gateway_pid" || { echo "::error::Gateway exited during startup"; exit 1; }
+            kill -0 "$proxy_pid" || { echo "::error::Proxy exited during startup"; exit 1; }
+            sleep 2
+          done
+          status=$(curl --noproxy '*' -sS -o "$proxy_dir/denied.json" -w '%{http_code}' \
+            -H 'Content-Type: application/json' -d '{"model":"gpt-oss-120b","messages":[]}' \
+            "$MODEL_PROXY_URL/v1/chat/completions")
+          echo "Unauthenticated inference request returned HTTP $status."
+          listing=$(curl --noproxy '*' -sS -o "$proxy_dir/models.json" -w '%{http_code}' \
+            -H "Authorization: Bearer $MODEL_PROXY_KEY" "$MODEL_PROXY_URL/v1/models")
+          echo "Authenticated model listing returned HTTP $listing."
+          if [[ "$status" != 401 && "$status" != 403 || "$listing" != 200 ]]; then
+            if [[ -z "$GROQ_API_KEY" ]]; then
+              for response in "$proxy_dir/denied.json" "$proxy_dir/models.json"; do
+                jq -r '.error | if type == "object" then [.type,.code,.message] | @tsv else empty end' "$response" | cut -c1-300
+              done
+            fi
+            echo "::error::Proxy authentication probes failed."
+            exit 1
+          fi
+          jq -e 'any(.data[]; .id == "gpt-oss-120b")' "$proxy_dir/models.json" >/dev/null
+          echo "Proxy authentication passed and the GPT-OSS 120B route is registered."
+          if [[ -z "$GROQ_API_KEY" ]]; then
+            echo "Offline checks complete. Groq live evaluation was skipped." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          test -n "$HF_TOKEN"
+          uv tool install harbor==0.20.0 --with websockets
+          export PATH="$HOME/.local/bin:$PATH"
+          export HF_HUB_DISABLE_PROGRESS_BARS=1
+          eval_dir="$RUNNER_TEMP/ple-evaluation"
+          set +e
+          uv run python eval/run.py ../entry --tasks data-hall-mep-routing --trials 1 --attempts 1 --out "$eval_dir" > "$RUNNER_TEMP/eval.log" 2>&1
+          eval_status=$?
+          set -e
+          if [[ -f "$eval_dir/results.json" ]]; then
+            jq '{model,score,complete,unmeasured,tasks:[.tasks[]|{id,score,reward,kind}]}' "$eval_dir/results.json" | tee "$GITHUB_WORKSPACE/result-summary.json"
+          fi
+          cat > "$RUNNER_TEMP/recipient.pem" <<'CERT'
+          -----BEGIN CERTIFICATE-----
+          MIIEKTCCApGgAwIBAgIUGRGlQKnZetSTSrajxvWejWhuAZ4wDQYJKoZIhvcNAQEL
+          BQAwJDEiMCAGA1UEAwwZUExFIGV2YWx1YXRpb24gY2hlY2twb2ludDAeFw0yNjEx
+          MjQwNzEyMzVaFw0yNzAxMTMwNzEyMzVaMCQxIjAgBgNVBAMMGVBMRSBldmFsdWF0
+          aW9uIGNoZWNrcG9pbnQwggGiMA0GCSqGSIb3DQEBAQUAA4IBjwAwggGKAoIBgQCw
+          dUnNXbUlL01VatwdlGvuphWnCPXuwFICqHh0hibOjrYK4C13HqMFlrLAV03cnYOh
+          oNfN6az+n3L+5eShfQjFYcna9FCPirZM9WRs/dct1FRLSm6/3NRUEtiZ34LsbqSW
+          aTreM75FD/C9jjmNRkjC4yYa4uZ7pqNJ+YaVtV4n8kTRMjv4+G+kgE48qlGKnjQR
+          hu3eqZDsuJdjEDLrYvhcNtZfiagcXZkCJcefSho5bvTdyCMsFKNEZ3Jh+qSSWaqr
+          a+iApcDNNf18jwCZZiQC0Z6/eqW/6zo9ANvWB23NvP+2+OgXKiTI1uirvin+hMTJ
+          XiPAUJYgTvXIJ74ySqMdUbPw65O+15IUVsqY28uufWjUudR6JSHYKZ8M5y8+JNUn
+          pxFK+MH48mC3yuJayiR459qFJvTmso0HpCLFglMldSWOirvSnKJ+cOfizcyZxxih
+          UJSyRWuX9gftbiEKyXvNz+D0FPOfYmIz0Jk8ySBIvtgUJzTU6R5UdERQdHgf6McC
+          AwEAAaNTMFEwHQYDVR0OBBYEFAUHsmGEkriINCUTgp5Zf4LOZIYVMB8GA1UdIwQY
+          MBaAFAUHsmGEkriINCUTgp5Zf4LOZIYVMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZI
+          hvcNAQELBQADggGBABLUJdZFZt3E0EGf2n/3btZoZyTVDWk9Vl5GCfCDyiIaKOgi
+          ek4ZEpooh4Qax6Nf93dJgM+l1wgAtfVt4opztcSvrWJIIXzznbxUvY1/kdbAC3yU
+          Ma76i607Nvuei99TwK3g8SQ5y1+2oe+7YQerlxcegLNUMzik9M2Sr/0Ytt+b+n5V
+          XSkysMWiCo8UbEJfe/4Axk5ExkhtMvahn2M74XwjBanz2x7OuPjpKyIVGZ4Glmmn
+          6kovb+8VhgWa1yKVOcXbIX9KpAOg+26ZLaJSMH9uiA1Ylp8ZZTNBh10bP5Lu0+B0
+          b1TtDkmIR+PnoCL2bX/SfXpGuV9Zxgm+tn/vBD02YwJDuit3wIi9v8IrQzuM67Zg
+          5qZ+xyeO5L/xxDJnAAQPpqzOHVpJD5v/BRKEtTsTNWTjxxO2RPiQYRvzVx5Zcyyp
+          5UvSYlMQv9DX2quyx3uJIxG+KbtiIR57Tey+1OVtjMBf526enLJFoo4yDz2gDvCc
+          +NCoAog5GOI2yzLr9Q==
+          -----END CERTIFICATE-----
+          CERT
+          paths=(eval.log)
+          [[ ! -d "$eval_dir/artifacts" ]] || paths+=(ple-evaluation/artifacts)
+          [[ ! -f "$eval_dir/results.json" ]] || paths+=(ple-evaluation/results.json)
+          tar -czf - -C "$RUNNER_TEMP" "${paths[@]}" | openssl cms -encrypt -binary -aes256 -stream -outform DER -out "$GITHUB_WORKSPACE/evaluation.cms" "$RUNNER_TEMP/recipient.pem"
+          if [[ "$eval_status" != 0 ]]; then
+            python - "$RUNNER_TEMP/eval.log" <<'PY'
+          import pathlib, sys
+          output = pathlib.Path(sys.argv[1]).read_text(errors="replace").lower()
+          for marker in ("403", "401", "429", "rate limit", "disk space", "no space left", "cannot read", "permission", "insufficient", "not enough", "cpu", "memory", "docker", "not found", "could not", "hf_token", "harbor failed"):
+              if marker in output:
+                  print("Evaluation diagnostic:", marker)
+          PY
+          fi
+          exit "$eval_status"
+      - name: Keep encrypted evaluation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: groq-pilot-evidence
+          path: |
+            evaluation.cms
+            result-summary.json
+          if-no-files-found: warn
+          retention-days: 7
