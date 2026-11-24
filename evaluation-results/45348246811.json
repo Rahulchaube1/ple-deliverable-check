@@ -1,0 +1,30 @@
+{
+  "task": "data-hall-mep-routing",
+  "model": "google-cloud/gpt-oss-120b",
+  "harness_commit": "42ac6a6ad624dd77205657fe696bba5fe8a772a0",
+  "workflow_run": 45348246811,
+  "artifact_id": 14900885187,
+  "score": 0,
+  "reward": 0,
+  "measured": true,
+  "classification": "harness",
+  "cause": "Groq free-tier daily token limit",
+  "input_tokens": 112022,
+  "output_tokens": 58840,
+  "elapsed_seconds": 1189,
+  "exported_file_count": 1,
+  "exported_file_bytes": 10397,
+  "kit_artifact_review": {
+    "usable": 1,
+    "missing": 28
+  },
+  "judge": "Official task configured for automated checks. Harness failure recorded before successful completion.",
+  "quota": {
+    "daily_limit": 200000,
+    "used_at_rejection": 194763,
+    "requested": 11633,
+    "provider_retry_after": "46m3.072s",
+    "conservative_earliest_retry_utc": "2026-11-24T08:36:13Z",
+    "note": "Rolling availability estimate for the rejected request size. Check current remaining capacity before the next development task."
+  }
+}
