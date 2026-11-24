@@ -114,14 +114,18 @@ jobs:
             -H 'Content-Type: application/json' -d '{"model":"claude-opus-5-5","messages":[]}' \
             "$MODEL_PROXY_URL/v1/chat/completions")
           echo "Unauthenticated inference request returned HTTP $status."
-          if [[ "$status" != 401 && "$status" != 403 ]]; then
-            echo "::error::Proxy did not reject the unauthenticated request as expected."
-            exit 1
-          fi
           listing=$(curl --noproxy '*' -sS -o "$proxy_dir/models.json" -w '%{http_code}' \
             -H "Authorization: Bearer $MODEL_PROXY_KEY" "$MODEL_PROXY_URL/v1/models")
           echo "Authenticated model listing returned HTTP $listing."
-          [[ "$listing" == 200 ]]
+          if [[ "$status" != 401 && "$status" != 403 || "$listing" != 200 ]]; then
+            if [[ -z "$ANTHROPIC_API_KEY" ]]; then
+              for response in "$proxy_dir/denied.json" "$proxy_dir/models.json"; do
+                jq -r '.error | if type == "object" then [.type,.code,.message] | @tsv else empty end' "$response" | cut -c1-300
+              done
+            fi
+            echo "::error::Proxy authentication probes failed."
+            exit 1
+          fi
           jq -e 'any(.data[]; .id == "claude-opus-5-5")' "$proxy_dir/models.json" >/dev/null
           echo "Proxy authentication passed and the Claude Opus 5.5 route is registered."
           if [[ -z "$ANTHROPIC_API_KEY" ]]; then
