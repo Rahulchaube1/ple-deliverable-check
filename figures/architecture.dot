@@ -1,0 +1,16 @@
+digraph Harness {
+  graph [rankdir=TB, bgcolor="white", pad=0.25, nodesep=0.4, ranksep=0.45];
+  node [shape=box, style="rounded,filled", fillcolor="#f3f6fa", color="#607182", fontname="Helvetica", fontsize=13];
+  edge [color="#526272", fontname="Helvetica", fontsize=11];
+  task [label="Evaluator sends project instructions"];
+  agent [label="Model reads project files and declares deliverables"];
+  work [label="Run calculations or edit project files"];
+  app [label="Use project applications over MCP"];
+  check [label="Reopen declared files and inspect format", fillcolor="#fff0d9"];
+  done [label="Return summary and any unresolved checks"];
+  task -> agent;
+  agent -> work; agent -> app;
+  work -> check; app -> check;
+  check -> agent [label="repair, at most twice", constraint=false];
+  check -> done [label="pass, no declared files, or repair limit"];
+}
