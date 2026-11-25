@@ -53,7 +53,7 @@ jobs:
             - model_name: gpt-oss-120b
               litellm_params:
                 model: openai/openai/gpt-oss-120b
-                api_base: https://api.groq.com/openai/v1
+                api_base: http://127.0.0.1:4002/openai/v1
                 api_key: os.environ/GROQ_API_KEY
           general_settings:
             master_key: os.environ/MODEL_PROXY_KEY
@@ -88,6 +88,25 @@ jobs:
             map "$bearer_ok:$native_ok" $authorized {
               default 1;
               "0:0" 0;
+            }
+            # Space provider calls by one minute to respect the free-tier TPM ceiling.
+            limit_req_zone $server_name zone=groq_pacing:1m rate=1r/m;
+            server {
+              listen 127.0.0.1:4002;
+              server_name groq_pacing;
+              location = /openai/v1/chat/completions {
+                limit_req zone=groq_pacing burst=2;
+                limit_req_status 429;
+                proxy_pass https://api.groq.com;
+                proxy_ssl_server_name on;
+                proxy_ssl_name api.groq.com;
+                proxy_ssl_verify on;
+                proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+                proxy_set_header Host api.groq.com;
+                proxy_buffering off;
+                proxy_read_timeout 300s;
+              }
+              location / { return 404; }
             }
             server {
               listen ${bridge}:4000;
@@ -167,6 +186,8 @@ jobs:
                   value = response.headers.get(header, "")
                   if re.fullmatch(r"[0-9.hms]+", value): print(header, value)
           PY
+          # The direct preflight also consumes minute quota.
+          sleep 61
           uv tool install harbor==0.20.0 --with websockets
           export PATH="$HOME/.local/bin:$PATH"
           export HF_HUB_DISABLE_PROGRESS_BARS=1
