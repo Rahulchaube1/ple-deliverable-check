@@ -2,7 +2,7 @@
 
 Development results as of November 25, 2026. Three of the 29 PLE development tasks have a measured result for this harness.
 
-The harness asks the model to identify its deliverables, write them inside the task workspace, then reopen the files before declaring completion. We tested whether that process could finish with GPT-OSS 120B on Groq’s free service. All three trials exported a file and received zero reward. A daily token limit interrupted two trials, and a per-minute limit interrupted the third.
+The harness asks the model to identify its deliverables, write them inside the task workspace, then reopen the files before declaring completion. We tested whether that process could finish with GPT-OSS 120B on Groq’s free service. The initial three trials exported a file and received zero reward. A daily token limit interrupted two trials, and a per-minute limit interrupted the third.
 
 | Development task | Official reward | Elapsed time | Input tokens | Output tokens | Exported bytes |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -14,4 +14,6 @@ The official runner classified all three outcomes as harness failures. All three
 
 The site-model trial illustrates a practical limit of the preflight test. Groq answered a short request before the trial, then rejected a 5,527-token request when the organization had 177 daily tokens left. A successful preflight showed that the model was reachable, but it did not establish that enough daily quota remained to finish an assignment.
 
-All three runs used the [same harness revision](https://github.com/Rahulchaube1/ple-deliverable-check/tree/42ac6a6ad624dd77205657fe696bba5fe8a772a0) and [competition kit revision](https://github.com/google-research/ple/tree/5cf736f8b6e6f28eea71cae52de0c3bedaa88fa2). The linked task records identify the GitHub Actions runs, encrypted evidence artifacts and provider quota observations. No substitute model judge was used in these three trials.
+The initial three runs used the [same harness revision](https://github.com/Rahulchaube1/ple-deliverable-check/tree/42ac6a6ad624dd77205657fe696bba5fe8a772a0) and [competition kit revision](https://github.com/google-research/ple/tree/5cf736f8b6e6f28eea71cae52de0c3bedaa88fa2). The linked task records identify the GitHub Actions runs, encrypted evidence artifacts and provider quota observations. No substitute model judge was used in these three trials.
+
+The [paced offset-routing retry](./evaluation-results/45606661815.json) received an official reward of 0.0 using the same harness and automated checks. Groq reported 192,465 of 200,000 daily tokens used when a request needed 7,700. The provider quoted 71.28 seconds for that request and gave no full daily reset timestamp. This fourth trial leaves coverage at three distinct tasks. GitHub Actions retained the encrypted evidence and score summary together.
