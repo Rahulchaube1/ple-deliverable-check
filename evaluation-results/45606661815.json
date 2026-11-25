@@ -1,0 +1,26 @@
+{
+  "task": "data-hall-mep-routing-offset",
+  "model": "openai/gpt-oss-120b",
+  "harness_commit": "42ac6a6ad624dd77205657fe696bba5fe8a772a0",
+  "workflow_run": 45606661815,
+  "retry_of": 45598717259,
+  "artifact_id": 15020478900,
+  "artifact_sha256": "68fbf0bfd07d1194789800ffee4c9354b73fe1ff5506fe968be0fd16983a4b6b",
+  "score": 0,
+  "reward": 0,
+  "measured": true,
+  "classification": "harness",
+  "judge": "Official automated checks",
+  "quota": {
+    "type": "tokens_per_day",
+    "limit": 200000,
+    "used": 192465,
+    "requested": 7700,
+    "retry_seconds": 71.28,
+    "observed_utc": "2026-11-25T12:31:02.807Z",
+    "earliest_request_retry_utc": "2026-11-25T12:32:14.087Z",
+    "full_reset_at": null
+  },
+  "next_task": "frame-extension-method",
+  "scheduling_note": "The short wait covers the rejected request. No full daily reset timestamp was reported. Allow one daily window from the observation (2026-11-26 12:31:03 UTC) before starting the next trial unless sufficient replenishment is independently confirmed earlier. Verify branch runs first."
+}
