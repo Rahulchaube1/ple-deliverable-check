@@ -1,0 +1,26 @@
+{
+  "task": "data-hall-mep-routing-offset",
+  "model": "google-cloud/gpt-oss-120b",
+  "harness_commit": "42ac6a6ad624dd77205657fe696bba5fe8a772a0",
+  "workflow_run": 45598717259,
+  "artifact_id": 15014577356,
+  "artifact_sha256": "b4885a622da45a95e42384e4c33b640feaffaf0b20500127ec2f5e88dbfe9db8",
+  "score": 0,
+  "reward": 0,
+  "measured": true,
+  "classification": "harness",
+  "cause": "Groq's per-minute token limit interrupted inference after the harness exhausted its retries.",
+  "elapsed_seconds": 107,
+  "input_tokens": 7175,
+  "output_tokens": 4953,
+  "exported_file_count": 1,
+  "exported_file_bytes": 14079,
+  "judge": "Official automated checks. No substitute judge.",
+  "quota": {
+    "minute_limit": 8000,
+    "used_at_rejection": 7162,
+    "requested": 6287,
+    "provider_retry_after_seconds": 40.8675,
+    "daily_limit_observed": false
+  }
+}
