@@ -172,7 +172,7 @@ jobs:
           export HF_HUB_DISABLE_PROGRESS_BARS=1
           eval_dir="$RUNNER_TEMP/ple-evaluation"
           set +e
-          uv run python eval/run.py ../entry --tasks data-center-site-model --trials 1 --attempts 1 --out "$eval_dir" > "$RUNNER_TEMP/eval.log" 2>&1
+          uv run python eval/run.py ../entry --tasks data-hall-mep-routing-offset --trials 1 --attempts 1 --out "$eval_dir" > "$RUNNER_TEMP/eval.log" 2>&1
           eval_status=$?
           set -e
           if [[ -f "$eval_dir/results.json" ]]; then
@@ -216,6 +216,19 @@ jobs:
                   errors.append({k: str(error.get(k, ""))[:2000] for k in ("exception_type", "exception_message")})
           pathlib.Path(sys.argv[2]).write_text(json.dumps(errors))
           PY
+          python - "$proxy_dir/server.log" "$RUNNER_TEMP/runner-errors.json" <<'PY'
+          import datetime, pathlib, re, sys
+          diagnostics = "\n".join(pathlib.Path(p).read_text(errors="replace") for p in sys.argv[1:])
+          if re.search(r"tokens per day|\bTPD\b", diagnostics, re.I):
+              # Emit numeric limits and retry intervals only. Keep all raw text encrypted.
+              print("Daily token limit mentioned in diagnostics.")
+              for field in ("Limit", "Used", "Requested"):
+                  values = re.findall(r"\b" + field + r"\s*[:=]?\s*([\d,]+)", diagnostics, re.I)
+                  if values: print(field, values[-1])
+              waits = re.findall(r"try again in\s+((?:[\d.]+(?:ms|[dhms])\s*)+)", diagnostics, re.I)
+              if waits: print("Provider retry interval:", waits[-1].strip())
+              print("Quota observation UTC:", datetime.datetime.now(datetime.timezone.utc).isoformat())
+          PY
           paths=(eval.log runner-errors.json)
           # Preserve the provider's diagnostics only inside the encrypted checkout.
           cp "$proxy_dir/server.log" "$RUNNER_TEMP/model-proxy.log"
@@ -237,7 +250,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: groq-data-center-site-model-evidence
+          name: groq-data-hall-mep-routing-offset-evidence
           path: |
             evaluation.cms
             result-summary.json
