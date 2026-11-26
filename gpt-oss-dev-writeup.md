@@ -1,6 +1,6 @@
 # Testing a deliverable-checking engineering agent on GPT-OSS 120B
 
-Development results as of November 26, 2026. Four of the 29 PLE development tasks have a measured result for this harness.
+Development results as of November 26, 2026. Five of the 29 PLE development tasks have a measured result for this harness.
 
 The harness asks the model to identify its deliverables, write them inside the task workspace, then reopen the files before declaring completion. We tested whether that process could finish with GPT-OSS 120B on Groq’s free service. The initial three trials exported a file and received zero reward. A daily token limit interrupted two trials, and a per-minute limit interrupted the third.
 
@@ -18,4 +18,6 @@ The initial three runs used the [same harness revision](https://github.com/Rahul
 
 The [paced offset-routing retry](./evaluation-results/45606661815.json) received an official reward of 0.0 using the same harness and automated checks. Groq reported 192,465 of 200,000 daily tokens used when a request needed 7,700. The provider quoted 71.28 seconds for that request and gave no full daily reset timestamp. This fourth trial repeated an existing task. GitHub Actions retained the encrypted evidence and score summary together.
 
-On November 26, the [frame-extension trial](./evaluation-results/45836177124.json) received 0.0 from the official automated checks. The evaluator marked the trial complete with classification `ok`. This brings coverage to four distinct tasks across five trials. The other 25 development tasks remain unmeasured.
+On November 26, the [frame-extension trial](./evaluation-results/45836177124.json) received 0.0 from the official automated checks. The evaluator marked the trial complete with classification `ok`. This was the fourth distinct task measured.
+
+The [medium-voltage conveyance study](./evaluation-results/45848391548.json) received 0.0. The official evaluator classified the outcome as a harness failure. Groq reported 199,058 of 200,000 daily tokens used when the model requested another 8,799. This leaves 24 tasks unmeasured, with five distinct tasks measured across six trials. All five used automated checks.
