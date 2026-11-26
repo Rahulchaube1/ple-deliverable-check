@@ -1,0 +1,26 @@
+{
+  "task": "mv-conveyance-study",
+  "model": "openai/gpt-oss-120b",
+  "harness_commit": "42ac6a6ad624dd77205657fe696bba5fe8a772a0",
+  "workflow_run": 45848391548,
+  "artifact_id": 15134358629,
+  "artifact_sha256": "342c62037e8e6fc9c99bf0e766e5b3c824e82a6e3dbe46292c7be303a2f743fd",
+  "artifact_expires_at": "2026-12-03T15:50:46Z",
+  "score": 0,
+  "reward": 0,
+  "measured": true,
+  "classification": "harness",
+  "judge": "Official automated checks",
+  "next_task": "data-hall-device-takeoff",
+  "quota": {
+    "type": "tokens_per_day",
+    "limit": 200000,
+    "used": 199058,
+    "requested": 8799,
+    "observed_utc": "2026-11-26T15:50:46.062620Z",
+    "retry_seconds": 3394.224,
+    "earliest_request_retry_utc": "2026-11-26T16:47:20.287Z",
+    "full_reset_at": null
+  },
+  "scheduling_note": "The retry interval covers one request. Allow a daily window until 2026-11-27T15:50:47Z for the next full trial unless sufficient replenishment is verified earlier."
+}
