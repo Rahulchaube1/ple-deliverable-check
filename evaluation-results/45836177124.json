@@ -1,0 +1,15 @@
+{
+  "task": "frame-extension-method",
+  "model": "openai/gpt-oss-120b",
+  "harness_commit": "42ac6a6ad624dd77205657fe696bba5fe8a772a0",
+  "workflow_run": 45836177124,
+  "artifact_id": 15129502389,
+  "artifact_sha256": "b5926a6e41e5f8d671c0f31ec74ace28a839989607367ddc9fc789f2366458b3",
+  "artifact_expires_at": "2026-12-03T14:54:10Z",
+  "score": 0,
+  "reward": 0,
+  "measured": true,
+  "classification": "ok",
+  "judge": "Official automated checks",
+  "next_task": "mv-conveyance-study"
+}
