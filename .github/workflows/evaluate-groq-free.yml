@@ -193,7 +193,7 @@ jobs:
           export HF_HUB_DISABLE_PROGRESS_BARS=1
           eval_dir="$RUNNER_TEMP/ple-evaluation"
           set +e
-          uv run python eval/run.py ../entry --tasks mv-conveyance-study --trials 1 --attempts 1 --out "$eval_dir" > "$RUNNER_TEMP/eval.log" 2>&1
+          uv run python eval/run.py ../entry --tasks data-hall-device-takeoff --trials 1 --attempts 1 --out "$eval_dir" > "$RUNNER_TEMP/eval.log" 2>&1
           eval_status=$?
           set -e
           if [[ -f "$eval_dir/results.json" ]]; then
@@ -271,7 +271,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: groq-mv-conveyance-study-evidence
+          name: groq-data-hall-device-takeoff-evidence
           path: |
             evaluation.cms
             result-summary.json
