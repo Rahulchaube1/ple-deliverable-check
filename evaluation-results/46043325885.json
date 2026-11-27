@@ -1,0 +1,26 @@
+{
+  "task": "division-26-specifications",
+  "model": "openai/gpt-oss-120b",
+  "harness_commit": "42ac6a6ad624dd77205657fe696bba5fe8a772a0",
+  "workflow_run": 46043325885,
+  "artifact_id": 15223142129,
+  "artifact_sha256": "088ce6235a989237bde674fa7a2d07843d57a15d0d6d5a94e1543f65c37d26e5",
+  "artifact_expires_at": "2026-12-04T18:11:16Z",
+  "score": 0,
+  "reward": 0,
+  "measured": true,
+  "classification": "harness",
+  "judge": "Official automated checks",
+  "next_task": "heat-rejection-life-cycle-cost",
+  "quota": {
+    "type": "tokens_per_day",
+    "limit": 200000,
+    "used": 195572,
+    "requested": 6120,
+    "observed_utc": "2026-11-27T18:11:16.418522Z",
+    "retry_seconds": 730.944,
+    "earliest_request_retry_utc": "2026-11-27T18:23:27.363Z",
+    "full_reset_at": null
+  },
+  "scheduling_note": "Check for sufficient replenishment before running the next full trial. In the absence of newer quota evidence, allow one daily window through 2026-11-28T18:11:17Z."
+}
