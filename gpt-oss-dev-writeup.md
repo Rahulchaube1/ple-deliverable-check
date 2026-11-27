@@ -1,6 +1,6 @@
 # Testing a deliverable-checking engineering agent on GPT-OSS 120B
 
-Development results as of November 27, 2026. Six of the 29 PLE development tasks have a measured result for this harness.
+Development results as of November 27, 2026. Seven of the 29 PLE development tasks have a measured result for this harness.
 
 The harness asks the model to identify its deliverables, write them inside the task workspace, then reopen the files before declaring completion. We tested whether that process could finish with GPT-OSS 120B on Groq’s free service. The initial three trials exported a file and received zero reward. A daily token limit interrupted two trials, and a per-minute limit interrupted the third.
 
@@ -22,4 +22,6 @@ On November 26, the [frame-extension trial](./evaluation-results/45836177124.jso
 
 The [medium-voltage conveyance study](./evaluation-results/45848391548.json) received 0.0. The official evaluator classified the outcome as a harness failure. Groq reported 199,058 of 200,000 daily tokens used when the model requested another 8,799. At that point, 24 tasks were unmeasured, with five distinct tasks measured across six trials. All five used automated checks.
 
-On November 27, the [device-takeoff trial](./evaluation-results/46032541689.json) received 0.0 from the official automated checks. The evaluator marked it complete with classification `ok`. Across seven trials, six distinct tasks have measured scores, all zero. The other 23 tasks are unmeasured.
+On November 27, the [device-takeoff trial](./evaluation-results/46032541689.json) received 0.0 from the official automated checks. The evaluator marked it complete with classification `ok`. Across seven trials, six distinct tasks have measured scores, all zero. At that point, 23 tasks were unmeasured.
+
+The [Division 26 specifications trial](./evaluation-results/46043325885.json) received an official reward of 0.0 and a `harness` classification. Groq rejected a 6,120-token request with 4,428 tokens left in the daily allowance. The provider gave a retry interval for that request and did not report a full daily reset time. All seven measured tasks used official automated checks and scored zero. The remaining 22 tasks are unmeasured.
