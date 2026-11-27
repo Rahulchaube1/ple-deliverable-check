@@ -1,0 +1,15 @@
+{
+  "task": "data-hall-device-takeoff",
+  "model": "openai/gpt-oss-120b",
+  "harness_commit": "42ac6a6ad624dd77205657fe696bba5fe8a772a0",
+  "workflow_run": 46032541689,
+  "artifact_id": 15219600336,
+  "artifact_sha256": "c76a8e1bf11a9cab8892b9cff666767baac1c6b1fbe5a69ee81a00af9f225be9",
+  "artifact_expires_at": "2026-12-04T16:52:36Z",
+  "score": 0,
+  "reward": 0,
+  "measured": true,
+  "classification": "ok",
+  "judge": "Official automated checks",
+  "next_task": "division-26-specifications"
+}
